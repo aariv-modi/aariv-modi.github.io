@@ -1,43 +1,39 @@
 # Essays
 
-A plain essay site. Each essay is a text file; one script turns them into web pages.
+A plain essay site, live at https://aariv-modi.github.io.
 
-## Write an essay
+## Write and publish
 
-Make a new file in `essays/`, like `essays/why-i-write.md`. The file name becomes the address (`why-i-write.html`).
+```
+python editor.py
+```
+
+This opens the editor in your browser (http://localhost:8000/edit). Keep the window it runs in open while you write.
+
+- **Save** keeps the essay on this computer only. New essays start as drafts.
+- **Preview** shows the page as it will look on the site.
+- **Publish** sends the essay to GitHub, and it goes live in a minute or two.
+- For an essay that's already live, **Publish changes** updates it and **Unpublish** takes it down.
+
+The editor only works from this computer. To post from elsewhere, add a file to the `essays` folder on github.com.
+
+## Essay files
+
+Each essay is a text file in `essays/`, named after its title (`why-i-write.md` becomes `why-i-write.html`). You can also edit these files directly:
 
 ```
 title: Why I Write
-date: 2026-11
+date: 2026-11-24
+draft: yes
 
 First paragraph...
 ```
 
-Add `draft: yes` under the date to keep it off the site while you work on it.
-`essays/how-this-site-works.md` shows all the formatting; delete it when you're done with it.
-Images go in `files/` and are referenced as `![description](files/photo.jpg)`.
-
-## Preview
-
-```
-python build.py serve
-```
-
-Then open http://localhost:8000. Edit an essay and refresh to see the change.
-
-## Publish
-
-The site lives at https://aariv-modi.github.io. Commit and push, and GitHub rebuilds and publishes it within a minute or two:
-
-```
-git add -A
-git commit -m "New essay"
-git push
-```
-
-`python build.py` builds the same site locally into `site/`, if you ever want to host it elsewhere.
+`essays/how-this-site-works.md` shows all the formatting. Images go in `files/` and are referenced as `![description](files/photo.jpg)`.
+To delete an essay, delete its file, then commit and push.
 
 ## Settings
 
-Your name, site address and an optional intro line are at the top of `build.py`.
+The site name and an optional intro line are at the top of `build.py`.
 Fonts, colors and widths are in `style.css`. The page frame is `layout.html`.
+GitHub runs `build.py` on every push to rebuild the site (drafts left out).

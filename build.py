@@ -1,7 +1,8 @@
-"""Build the essay site.
+"""Build the essay site into the site/ folder (drafts left out).
 
-    python build.py          build the site into the site/ folder
-    python build.py serve    preview at http://localhost:8000 (rebuilds on every refresh)
+    python build.py
+
+GitHub runs this automatically on every push. To write essays, use editor.py.
 """
 import html
 import re
@@ -108,7 +109,8 @@ def markdown(text):
 
 # ---- Essays ----------------------------------------------------------------
 
-def load(path):
+def read_source(path):
+    """Split an essay file into its settings (title, date, draft) and its text."""
     raw = path.read_text(encoding="utf-8-sig").replace("\r\n", "\n").lstrip()
     head, _, body = raw.partition("\n\n")
     meta = {}
@@ -117,31 +119,40 @@ def load(path):
             raise BuildError(f"{path.name}: the title and date lines must be followed by a blank line")
         key, _, value = line.partition(":")
         meta[key.strip().lower()] = value.strip()
+    meta["draft"] = meta.get("draft", "").lower() in ("yes", "true")
+    return meta, body
 
+
+def parse_date(text):
+    for fmt in ("%Y-%m-%d", "%Y-%m"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            pass
+    return None
+
+
+def load(path):
+    meta, body = read_source(path)
     if not meta.get("title"):
         raise BuildError(f"{path.name}: needs a 'title: ...' line at the top")
     if path.stem == "index":
         raise BuildError(f"{path.name}: 'index' is reserved for the home page; rename the file")
-    date = meta.get("date", "")
-    for fmt in ("%Y-%m-%d", "%Y-%m"):
-        try:
-            when = datetime.strptime(date, fmt)
-            break
-        except ValueError:
-            pass
-    else:
+    when = parse_date(meta.get("date", ""))
+    if not when:
         raise BuildError(f"{path.name}: date should look like 2026-11 or 2026-11-24")
 
     return {
         "slug": path.stem,
         "title": meta["title"],
         "when": when,
-        "draft": meta.get("draft", "").lower() in ("yes", "true"),
+        "draft": meta["draft"],
         "body": markdown(body),
     }
 
 
-def page(layout, title, content):
+def page(title, content):
+    layout = Template((ROOT / "layout.html").read_text(encoding="utf-8"))
     return layout.substitute(
         page_title=html.escape(title),
         site_title=html.escape(SITE_TITLE),
@@ -149,11 +160,11 @@ def page(layout, title, content):
     )
 
 
-def build():
-    layout = Template((ROOT / "layout.html").read_text(encoding="utf-8"))
+def build(include_drafts=False):
+    """Build the site. Drafts are only included for local previews (the editor)."""
     essays = [load(p) for p in sorted(ESSAYS.glob("*.md"))]
     essays.sort(key=lambda e: e["when"], reverse=True)
-    published = [e for e in essays if not e["draft"]]
+    published = [e for e in essays if include_drafts or not e["draft"]]
 
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -167,38 +178,16 @@ def build():
             f"<article>\n<h1>{html.escape(e['title'])}</h1>\n"
             f"<p class=\"date\">{e['when']:%B %Y}</p>\n\n{e['body']}\n</article>"
         )
-        (OUT / f"{e['slug']}.html").write_text(page(layout, e["title"], content), encoding="utf-8")
+        (OUT / f"{e['slug']}.html").write_text(page(e["title"], content), encoding="utf-8")
 
     intro = f"<p>{inline(INTRO)}</p>\n" if INTRO else ""
-    items = "\n".join(f'<li><a href="{e["slug"]}.html">{html.escape(e["title"])}</a></li>' for e in published)
+    items = "\n".join(
+        f'<li><a href="{e["slug"]}.html">{html.escape(e["title"])}</a>{" (draft)" if e["draft"] else ""}</li>'
+        for e in published
+    )
     listing = f'<ul class="essays">\n{items}\n</ul>' if published else "<p>No essays yet.</p>"
-    (OUT / "index.html").write_text(page(layout, SITE_TITLE, intro + listing), encoding="utf-8")
+    (OUT / "index.html").write_text(page(SITE_TITLE, intro + listing), encoding="utf-8")
     return len(published), len(essays) - len(published)
-
-
-# ---- Preview server ---------------------------------------------------------
-
-def serve(port=8000):
-    import http.server
-
-    class Handler(http.server.SimpleHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(OUT), **kwargs)
-
-        def do_GET(self):
-            if self.path.split("?")[0].endswith((".html", "/")):
-                try:
-                    build()
-                except BuildError as err:
-                    self.send_error(500, str(err))
-                    return
-            super().do_GET()
-
-        def log_message(self, *args):
-            pass
-
-    print(f"Preview at http://localhost:{port}  (edit an essay, then refresh; Ctrl+C to stop)")
-    http.server.HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 
 
 if __name__ == "__main__":
@@ -207,5 +196,3 @@ if __name__ == "__main__":
     except BuildError as err:
         sys.exit(f"Error: {err}")
     print(f"Built {built} essay(s) into {OUT}" + (f", skipped {drafts} draft(s)" if drafts else ""))
-    if sys.argv[1:] == ["serve"]:
-        serve()
