@@ -1,14 +1,16 @@
 """Write, preview and publish essays in your browser.
 
-    python editor.py
-
-Opens http://localhost:8000/edit. Only reachable from this computer.
+Start it from the "Write essay" shortcut (or `python editor.py`). It opens
+http://localhost:8000/edit, is only reachable from this computer, and stops by
+itself once no editor tab has been open for a while.
 """
 import html
 import os
 import re
 import subprocess
 import sys
+import threading
+import time
 import webbrowser
 from datetime import date
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -19,6 +21,10 @@ import build
 PORT = 8000
 SITE_URL = "https://aariv-modi.github.io"
 ALLOWED_ORIGINS = {f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"}
+IDLE_LIMIT = 30 * 60   # stop after this many seconds with no editor tab open
+CHECK_EVERY = 60
+
+last_seen = time.monotonic()
 
 STYLE = """<style>
 form { display: grid; gap: 1em; }
@@ -137,7 +143,8 @@ def editor_page(slug="", title="", when="", body="", draft=True, message="", log
 <label>Essay <textarea name="body">{esc(body)}</textarea></label>
 <div class="row">{''.join(buttons)}</div>
 </form>
-<p class="muted">{HELP}</p>""")
+<p class="muted">{HELP}</p>
+<script>setInterval(() => fetch("/ping").catch(() => {{}}), 30000);</script>""")
 
     rows = all_essays()
     if rows:
@@ -217,8 +224,17 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def handle_one_request(self):
+        global last_seen
+        last_seen = time.monotonic()
+        super().handle_one_request()
+
     def do_GET(self):
         url = urlparse(self.path)
+        if url.path == "/ping":  # an open editor tab checks in, keeping the editor running
+            self.send_response(204)
+            self.end_headers()
+            return
         if url.path in ("/edit", "/edit/"):
             slug = clean_slug(parse_qs(url.query).get("slug", [""])[0])
             return self.send_page(open_essay(slug))
@@ -242,14 +258,36 @@ class Handler(SimpleHTTPRequestHandler):
         pass
 
 
-if __name__ == "__main__":
+class EditorServer(HTTPServer):
+    # On Windows, address reuse would let a second copy start on the same port
+    # instead of noticing that the editor is already running.
+    allow_reuse_address = sys.platform != "win32"
+
+
+def stop_when_idle(server):
+    while True:
+        time.sleep(CHECK_EVERY)
+        if time.monotonic() - last_seen > IDLE_LIMIT:
+            server.shutdown()
+            return
+
+
+def main():
     build.ESSAYS.mkdir(exist_ok=True)
-    try:
-        build.build(include_drafts=True)
-    except build.BuildError as err:
-        sys.exit(f"Error: {err}")
     address = f"http://localhost:{PORT}/edit"
-    print(f"Editor running at {address}  (keep this window open; Ctrl+C to stop)")
-    if "--no-browser" not in sys.argv:
+    open_browser = "--no-browser" not in sys.argv
+    try:
+        server = EditorServer(("127.0.0.1", PORT), Handler)
+    except OSError:  # already running: just show it
+        if open_browser:
+            webbrowser.open(address)
+        return
+    threading.Thread(target=stop_when_idle, args=(server,), daemon=True).start()
+    print(f"Editor running at {address}  (stops by itself when no editor tab is open)")
+    if open_browser:
         webbrowser.open(address)
-    HTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

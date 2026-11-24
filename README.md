@@ -4,11 +4,9 @@ A plain essay site, live at https://aariv-modi.github.io.
 
 ## Write and publish
 
-```
-python editor.py
-```
+Double-click **Write essay** on the Desktop, or search for it in the Start menu. The editor opens in your browser (http://localhost:8000/edit). It runs without a window and stops by itself about 30 minutes after you close the editor tab.
 
-This opens the editor in your browser (http://localhost:8000/edit). Keep the window it runs in open while you write.
+If the shortcut is ever lost, `python editor.py` does the same thing.
 
 - **Save** keeps the essay on this computer only. New essays start as drafts.
 - **Preview** shows the page as it will look on the site.
