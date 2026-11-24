@@ -7,16 +7,14 @@ import html
 import re
 import shutil
 import sys
-from datetime import datetime, timezone
-from email.utils import format_datetime
+from datetime import datetime
 from pathlib import Path
 from string import Template
 
 # ---- Settings: edit these -------------------------------------------------
 
 SITE_TITLE = "Aariv"
-SITE_URL = "https://aariv-modi.github.io"  # the site's address (used by the RSS feed)
-INTRO = ""                        # optional sentence shown above the list of essays
+INTRO = ""  # optional sentence shown above the list of essays
 
 # ---------------------------------------------------------------------------
 
@@ -174,36 +172,8 @@ def build():
     intro = f"<p>{inline(INTRO)}</p>\n" if INTRO else ""
     items = "\n".join(f'<li><a href="{e["slug"]}.html">{html.escape(e["title"])}</a></li>' for e in published)
     listing = f'<ul class="essays">\n{items}\n</ul>' if published else "<p>No essays yet.</p>"
-    index = f'{intro}{listing}\n<footer><a href="feed.xml">RSS</a></footer>'
-    (OUT / "index.html").write_text(page(layout, SITE_TITLE, index), encoding="utf-8")
-
-    (OUT / "feed.xml").write_text(feed(published), encoding="utf-8")
+    (OUT / "index.html").write_text(page(layout, SITE_TITLE, intro + listing), encoding="utf-8")
     return len(published), len(essays) - len(published)
-
-
-def feed(essays):
-    base = SITE_URL.rstrip("/")
-    esc = html.escape
-    items = "".join(
-        f"""
-<item>
-<title>{esc(e['title'])}</title>
-<link>{base}/{e['slug']}.html</link>
-<guid>{base}/{e['slug']}.html</guid>
-<pubDate>{format_datetime(e['when'].replace(tzinfo=timezone.utc))}</pubDate>
-<description>{esc(e['body'])}</description>
-</item>"""
-        for e in essays
-    )
-    return f"""<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0">
-<channel>
-<title>{esc(SITE_TITLE)}</title>
-<link>{base}/</link>
-<description>Essays by {esc(SITE_TITLE)}</description>{items}
-</channel>
-</rss>
-"""
 
 
 # ---- Preview server ---------------------------------------------------------

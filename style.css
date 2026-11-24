@@ -54,5 +54,3 @@ a.ref { text-decoration: none; }
 
 ul.essays { list-style: none; padding: 0; }
 ul.essays li { margin: 0.4em 0; }
-
-footer { margin-top: 3em; color: var(--muted); font-size: 0.9em; }
